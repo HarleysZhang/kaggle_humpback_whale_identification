@@ -1,2 +1,6 @@
-# kaggle_humpback_whale_identification
-68th palce solution in Kaggle Humpback Whale Identification
+# [Humpback Whale Identification](https://www.kaggle.com/c/humpback-whale-identification)
+> 68th palce solution in Kaggle Humpback Whale Identification
+***
+## Some Best solution
+
+
