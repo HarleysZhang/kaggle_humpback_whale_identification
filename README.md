@@ -221,5 +221,4 @@ def my_lapjv(score):
     return x
 ```
 ## Reference
-[Whale Recognition Model with score 0.78563][1]
-[1]:[https://www.kaggle.com/martinpiotte/whale-recognition-model-with-score-0-78563]
+[Whale Recognition Model with score 0.78563](https://www.kaggle.com/martinpiotte/whale-recognition-model-with-score-0-78563)
