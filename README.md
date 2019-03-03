@@ -142,7 +142,7 @@ python test.py
 ```
 ## Some Code Interpretation
 Build a transformation matrix with the specified characteristics.
-```
+```python
 def build_transform(rotation, shear, height_zoom, width_zoom, height_shift, width_shift):
 	"""
 	Build a transformation matrix with the specified characteristics.
@@ -158,7 +158,7 @@ def build_transform(rotation, shear, height_zoom, width_zoom, height_shift, widt
 	return np.dot(np.dot(rotation_matrix, shear_matrix), np.dot(zoom_matrix, shift_matrix))
 ```
 Compute the score matrix by scoring every pictures from the training set against every other picture O(n^2) with multithreads.
-```
+```python
 def compute_score(verbose=1):
 	"""
 	Compute the score matrix by scoring every pictures from the training set against every other picture O(n^2).
@@ -185,7 +185,7 @@ def compute_score(verbose=1):
 
 ```
 sompute Linear programming problem with multithreads
-```
+```python
 def my_lapjv(score):
     num_threads = 6
     batch = score.shape[0] // (num_threads - 1)
