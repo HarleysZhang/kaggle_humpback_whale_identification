@@ -108,8 +108,9 @@ out.close()
 #### Software requirments
 + Ubuntu 18.04
 + Anaconda3/Python3
-+ Keras(backend: tensorflow)
-1.clone the repository
++ Keras(backend: tensorflow
+### Steps for usage
++ 1.clone the repository
 ```
 git https://github.com/HarleysZhang/kaggle_humpback_whale_identification.git
 cd kaggle_humpback_whale_identification
@@ -121,12 +122,15 @@ pip3 install -r requirements.txt
 ```
 + 3.download data  and copy it to data folder
 ```
+kaggle competitions download -c humpback-whale-identification
+```
+```
 cp train ./data/
 cp test ./data/
 cp train.csv ./data/
 cp sample_submission.csv ./data/
 ```
-+4.train your model 
++ 4.train your model 
 without bootstrapping
 ```
 python3 main_all.py
@@ -135,10 +139,10 @@ with bootstrapping
 ```
 python3 main_with_bootstrapping.py
 ```
-+5.ensemble submission file
++ 5.ensemble submission file
 ```
 python test.py
-#python test_tta.py    # with tta
+# python test_tta.py    # with tta
 ```
 ## Some Code Interpretation
 Build a transformation matrix with the specified characteristics.
