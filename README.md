@@ -119,7 +119,7 @@ cd kaggle_humpback_whale_identification
 ```
 pip3 install -r requirements.txt
 ```
-+ 3.download data and copy it to data folder
++ 3.download data  and copy it to data folder
 ```
 cp train ./data/
 cp test ./data/
