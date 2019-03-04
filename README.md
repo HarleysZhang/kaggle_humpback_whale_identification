@@ -11,6 +11,7 @@
 |31st|[31st Place Solution](https://www.kaggle.com/c/humpback-whale-identification/discussion/82393)|[Github code](https://github.com/suicao/Siamese-Whale-Identification)|Khoi Nguyen|RGB|
 |57th|[57th Place Solution](https://www.kaggle.com/c/humpback-whale-identification/discussion/82364)|Github code|Miguel Pinto|SoftTripletLoss|
 ## My solution
+Heavily based on [Whale Recognition Model with score 0.78563](https://www.kaggle.com/martinpiotte/whale-recognition-model-with-score-0-78563)
 ### Training
 + Framework: `Keras(backend: tensorflow)`
 + Model: `Siamese(CNN+Metric Learning)`
