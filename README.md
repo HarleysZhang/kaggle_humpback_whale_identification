@@ -108,8 +108,8 @@ out.close()
 #### Software requirments
 + Ubuntu 18.04
 + Anaconda3/Python3
-+ Kera(backend: tensorflow)
-+ 1.clone the repository
++ Keras(backend: tensorflow)
+1.clone the repository
 ```
 git https://github.com/HarleysZhang/kaggle_humpback_whale_identification.git
 cd kaggle_humpback_whale_identification
