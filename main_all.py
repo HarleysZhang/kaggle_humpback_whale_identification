@@ -33,18 +33,17 @@ import time
 import os
 import threading
 
-
 src_dir = os.getcwd()
 src_dir = src_dir.replace('\\', '/')
 print(src_dir)
 
-TRAIN_DF = os.path.join(src_dir, "data/train.csv")
-SUB_DF = os.path.join(src_dir, "data/sample_submission.csv")
-TRAIN = os.path.join(src_dir, "data/train")
-TEST = os.path.join(src_dir, "data/test")
-P2H = os.path.join(src_dir, "data/p2h.pickle")
-P2SIZE = os.path.join(src_dir, "data/p2size.pickle")
-BB_DF = os.path.join(src_dir, "data/bounding_boxes.csv")
+TRAIN_DF = os.path.join(src_dir, "dataset/train.csv")
+SUB_DF = os.path.join(src_dir, "dataset/sample_submission.csv")
+TRAIN = os.path.join(src_dir, "dataset/train")
+TEST = os.path.join(src_dir, "dataset/test")
+P2H = os.path.join(src_dir, "dataset/p2h.pickle")
+P2SIZE = os.path.join(src_dir, "dataset/p2size.pickle")
+BB_DF = os.path.join(src_dir, "dataset/bounding_boxes.csv")
 
 # 把Windows下os.path.join()生成的反斜杠（\）全部替换为斜杠（/）
 TRAIN_DF = TRAIN_DF.replace('\\', '/')
@@ -59,6 +58,8 @@ tagged = dict([(p, w) for _, p, w in read_csv(TRAIN_DF).to_records()])
 submit = [p for _, p, _ in read_csv(SUB_DF).to_records()]
 join = list(tagged.keys()) + submit
 
+if not os.path.exists("./logs"):
+	os.mkdir("./logs")
 
 # 根据图像Id,获取文件完整路径
 def expand_path(p):
@@ -264,8 +265,8 @@ def read_cropped_image(p, augment):
 	matrix = trans[:2, :2]
 	offset = trans[:2, 2]
 	img = img.reshape(img.shape[:-1])
-	img = affine_transform(img, matrix, offset, output_shape=img_shape[:-1], order=1, mode='constant',
-						   cval=np.average(img))
+	img = affine_transform(img, matrix, offset, output_shape=img_shape[:-1],
+						   order=1, mode='constant', cval=np.average(img))
 	img = img.reshape(img_shape)
 
 	# Normalize to zero mean and unit variance
@@ -344,7 +345,7 @@ def build_model(lr, l2, activation='sigmoid'):
 	for _ in range(4):
 		x = subblock(x, 128, **kwargs)
 
-	x = GlobalMaxPooling2D()(x)  # 512
+	x = GlobalMaxPooling2D()(x)  # 512, 输出shape: 形如(nb_samples, channels)的2D张量
 	branch_model = Model(inp, x)
 
 	############
@@ -366,7 +367,7 @@ def build_model(lr, l2, activation='sigmoid'):
 	x = Conv2D(1, (1, mid), activation='linear', padding='valid')(x)
 	x = Flatten(name='flatten')(x)
 
-	# Weighted sum implemented as a Dense layer.
+	# Dense layer的实现为加权和.
 	x = Dense(1, use_bias=True, activation=activation, name='weighted-average')(x)
 	head_model = Model([xa_inp, xb_inp], x, name='head')
 
@@ -387,6 +388,8 @@ def build_model(lr, l2, activation='sigmoid'):
 
 model, branch_model, head_model = build_model(64e-5, 0)
 
+# Find all the whales associated with an image id.
+# It can be ambiguous as duplicate images may have different whale ids.
 h2ws = {}
 new_whale = 'new_whale'
 for p, w in tagged.items():
@@ -394,7 +397,7 @@ for p, w in tagged.items():
 		h = p2h[p]
 		if h not in h2ws: h2ws[h] = []
 		if w not in h2ws[h]: h2ws[h].append(w)
-for h, ws in h2ws.items():
+for h, ws in h2ws.items(): # print(len(h2ws))    # 15696
 	if len(ws) > 1:
 		h2ws[h] = sorted(ws)
 
@@ -408,13 +411,17 @@ for h, ws in h2ws.items():
 for w, hs in w2hs.items():
 	if len(hs) > 1:
 		w2hs[w] = sorted(hs)
+# print(len(w2hs))    # 5004
 
+# Find the list of training images, keep only whales with at least two images.
+# 可用于训练的图像总共13263张
 train = []  # A list of training image ids
 for hs in w2hs.values():
 	if len(hs) > 1:
 		train += hs
 random.shuffle(train)
 train_set = set(train)
+# print(len(train))    # 13263
 
 w2ts = {}  # Associate the image ids from train to each whale id.
 for w, hs in w2hs.items():
@@ -426,6 +433,7 @@ for w, hs in w2hs.items():
 				w2ts[w].append(h)
 for w, ts in w2ts.items():
 	w2ts[w] = np.array(ts)
+# print(len(w2ts))    # 2931
 
 t2i = {}  # The position in train of each training image id
 for i, t in enumerate(train):
@@ -433,38 +441,38 @@ for i, t in enumerate(train):
 
 
 def my_lapjv(score):
-    num_threads = 6
-    batch = score.shape[0] // (num_threads - 1)
-    if score.shape[0] % batch <= 3:
-        num_threads = 5
-        if score.shape[0] % batch is not 0:
-            batch += 1
-    # print(batch)
-    tmp = num_threads * [None]
-    threads = []
-    thread_input = num_threads * [None]
-    thread_idx = 0
-    for start in range(0, score.shape[0], batch):
-        end = min(score.shape[0], start + batch)
-        # print('%d %d' % (start, end))
-        thread_input[thread_idx] = score[start:end, start:end]
-        thread_idx += 1
+	num_threads = 6
+	batch = score.shape[0] // (num_threads - 1)
+	if score.shape[0] % batch <= 3:
+		num_threads = 5
+		if score.shape[0] % batch is not 0:
+			batch += 1
+	# print(batch)
+	tmp = num_threads * [None]
+	threads = []    # 创建线程数组
+	thread_input = num_threads * [None]
+	thread_idx = 0
+	for start in range(0, score.shape[0], batch):
+		end = min(score.shape[0], start + batch)
+		# print('%d %d' % (start, end))
+		thread_input[thread_idx] = score[start:end, start:end]
+		thread_idx += 1
 
-    def worker(data_idx):
-        x, _, _ = lapjv(thread_input[data_idx])
-        tmp[data_idx] = x + data_idx * batch
+	def worker(data_idx):
+		x, _, _ = lapjv(thread_input[data_idx]) # 根据n*n的一个分数方阵来计算，以总体最小代价实现任务分配，每一个数值不会重复分配
+		tmp[data_idx] = x + data_idx * batch    # 索引更新
 
-    # print("Start worker threads")
-    for i in range(num_threads):
-        t = threading.Thread(target=worker, args=(i,), daemon=True)
-        t.start()
-        threads.append(t)
-    for t in threads:
-        if t is not None:
-            t.join()
-    x = np.concatenate(tmp)
-    # print("LAP completed")
-    return x
+	# print("Start worker threads")
+	for i in range(num_threads):
+		t = threading.Thread(target=worker, args=(i,), daemon=True)    # 创建子线程
+		t.start()            # 开始执行线程
+		threads.append(t)    # 把创建好的t线程装进threads线程数组
+	for t in threads:
+		if t is not None:
+			t.join()
+	x = np.concatenate(tmp)    # Join a sequence of arrays along an existing axis.
+	# print("LAP completed")
+	return x
 
 
 class TrainingData(Sequence):
@@ -474,15 +482,14 @@ class TrainingData(Sequence):
 		@param steps the number of epoch we are planning with this score matrix
 		"""
 		super(TrainingData, self).__init__()
-		self.score = -score  # Maximizing the score is the same as minimuzing -score.
+		self.score = -score  # 为使用lapjv, 使得lapjv找出来的索引对应分数最大
 		self.steps = steps
 		self.batch_size = batch_size
 		for ts in w2ts.values():
 			idxs = [t2i[t] for t in ts]
 			for i in idxs:
 				for j in idxs:
-					self.score[
-						i, j] = 10000.0  # Set a large value for matching whales -- eliminates this potential pairing
+					self.score[i, j] = 10000.0  # 为匹配鲸鱼设置一个很大的值 - 消除了这种潜在的配对
 		self.on_epoch_end()
 
 	def __getitem__(self, index):
@@ -510,15 +517,17 @@ class TrainingData(Sequence):
 		self.match = []
 		self.unmatch = []
 		x = my_lapjv(self.score)  # Solve the linear assignment problem
+		print(x.shape)    # (13263,)
 		y = np.arange(len(x), dtype=np.int32)
 
 		# Compute a derangement for matching whales
+		# match, 能匹配的图像对列表, 元祖里面的图像是一种图像
 		for ts in w2ts.values():
 			d = ts.copy()
 			while True:
 				random.shuffle(d)
-				if not np.any(ts == d): break
-			for ab in zip(ts, d): self.match.append(ab)
+				if not np.any(ts == d): break    # 直到每个索引上的图像id都不相等ｇ
+			for ab in zip(ts, d): self.match.append(ab)    # (13263), the list of tuples,
 
 		# Construct unmatched whale pairs from the LAP solution.
 		for i, j in zip(x, y):
@@ -528,7 +537,7 @@ class TrainingData(Sequence):
 				print(y)
 				print(i, j)
 			assert i != j
-			self.unmatch.append((train[i], train[j]))
+			self.unmatch.append((train[i], train[j]))    # 不能匹配的图像对列表, 元祖里面的图像不是一种图像
 
 		# Force a different choice for an eventual next epoch.
 		self.score[x, y] = 10000.0
@@ -545,6 +554,8 @@ class TrainingData(Sequence):
 # Test on a batch of 32 with random costs.
 score = np.random.random_sample(size=(len(train), len(train)))
 data = TrainingData(score)
+x = len(data)
+print(x)
 (a, b), c = data[1]
 
 
@@ -561,26 +572,33 @@ class FeatureGen(Sequence):
 		start = self.batch_size * index
 		size = min(len(self.data) - start, self.batch_size)
 		a = np.zeros((size,) + img_shape, dtype=K.floatx())
-		for i in range(size): a[i, :, :, :] = read_for_validation(self.data[start + i])
+		for i in range(size): a[i, :, :, :] = read_for_validation(self.data[start+i])    # 图像数组数据,
+		# start = self.batch_size * index
+		# size = min(len(self.data) - start, self.batch_size)
+		# a = np.zeros((size,) + img_shape, dtype=K.floatx())
+		# for i in range(size): a[i, :, :, :] = read_for_validation(self.data[start + i])
 		if self.verbose > 0:
 			self.progress.update()
 			if self.progress.n >= len(self): self.progress.close()
-		return a
+		return a    # 返回图像数组数据, (batch_size?, img_size, img_size, 1)
 
 	def __len__(self):
 		return (len(self.data) + self.batch_size - 1) // self.batch_size
 
 
+# A Keras generator to evaluate on the HEAD MODEL on features already pre-computed.
+# It computes only the upper triangular matrix of the cost matrix if y is None.
 class ScoreGen(Sequence):
 	def __init__(self, x, y=None, batch_size=2048, verbose=0):
 		super(ScoreGen, self).__init__()
-		self.x = x
+		self.x = x    # x = features, shape (2725/13263, 512)
 		self.y = y
 		self.batch_size = batch_size
 		self.verbose = verbose
 		if y is None:
 			self.y = self.x
-			self.ix, self.iy = np.triu_indices(x.shape[0], 1)
+			self.ix, self.iy = np.triu_indices(x.shape[0], 1)    # 上三角矩阵对角线偏移１位置后的索引
+			print(self.ix.shape, self.iy.shape)
 		else:
 			self.iy, self.ix = np.indices((y.shape[0], x.shape[0]))
 			self.ix = self.ix.reshape((self.ix.size,))
@@ -592,8 +610,8 @@ class ScoreGen(Sequence):
 	def __getitem__(self, index):
 		start = index * self.batch_size
 		end = min(start + self.batch_size, len(self.ix))
-		a = self.y[self.iy[start:end], :]
-		b = self.x[self.ix[start:end], :]
+		a = self.y[self.iy[start:end], :]    # 图像特征向量获取, shape (2048, 512)
+		b = self.x[self.ix[start:end], :]    # 图像特征向量获取
 		if self.verbose > 0:
 			self.progress.update()
 			if self.progress.n >= len(self): self.progress.close()
@@ -613,17 +631,21 @@ def get_lr(model):
 
 def score_reshape(score, x, y=None):
 	"""
-	Tranformed the packed matrix 'score' into a square matrix.
-	@param score the packed matrix
-	@param x the first image feature tensor
-	@param y the second image feature tensor if different from x
-	@result the square matrix
-	"""
+    将packed matrix的'得分'转换为方阵
+    @param score the packed matrix
+    @param x 第一张图像的特征张量
+    @param y 第二张图像的张量，如果与x不同
+    @结果为方阵
+    """
 	if y is None:
 		# When y is None, score is a packed upper triangular matrix.
 		# Unpack, and transpose to form the symmetrical lower triangular matrix.
-		m = np.zeros((x.shape[0], x.shape[0]), dtype=K.floatx())
-		m[np.triu_indices(x.shape[0], 1)] = score.squeeze()
+		# 当y为None时, 得分是打包的上三角矩阵
+		# 解包, 并转置以形成对称的下三角矩阵
+		m = np.zeros((x.shape[0], x.shape[0]), dtype=K.floatx())  # 利用features.shape[0]创建２维度的零数组
+		# numpy.squeeze() 从数组的形状中删除单维度条目，即把shape中为1的维度去掉
+		m[np.triu_indices(x.shape[0], 1)] = score.squeeze()       # 和ScoreGen产生的输入给head_model的a, b特征向量索引对应
+		# 加上m的转置矩阵(下三角矩阵)
 		m += m.transpose()
 	else:
 		m = np.zeros((y.shape[0], x.shape[0]), dtype=K.floatx())
@@ -634,14 +656,17 @@ def score_reshape(score, x, y=None):
 	return m
 
 
-# def compute_score(verbose=1):
+# def compute_score(verbose=0):
 # 	"""
 # 	Compute the score matrix by scoring every pictures from the training set against every other picture O(n^2).
 # 	"""
 # 	features = branch_model.predict_generator(FeatureGen(train, verbose=verbose), max_queue_size=12, workers=6,
 # 											  verbose=1)
+# 	print(features.shape) # (92786253, 1)
 # 	score = head_model.predict_generator(ScoreGen(features, verbose=verbose), max_queue_size=12, workers=6, verbose=1)
+# 	print(score.shape)    # (13263,)
 # 	score = score_reshape(score, features)
+# 	print(score.shape)    # (13263, 13263)
 # 	return features, score
 
 
@@ -650,8 +675,8 @@ def compute_score(verbose=1):
 	Compute the score matrix by scoring every pictures from the training set against every other picture O(n^2).
 	"""
 	features = branch_model.predict_generator(
-											FeatureGen(train, batch_size=64, verbose=verbose),
-											max_queue_size=12, workers=6, verbose=0)
+		FeatureGen(train, batch_size=64, verbose=verbose),
+		max_queue_size=12, workers=6, verbose=0)
 	num_threads = 6
 	batch = features.shape[0] // (num_threads - 1)
 	if features.shape[0] % batch <= 3:
@@ -663,8 +688,8 @@ def compute_score(verbose=1):
 		end = min(features.shape[0], start + batch)
 		temp_features = features[start:end, :]
 		temp_score = head_model.predict_generator(
-												ScoreGen(temp_features, batch_size=4096, verbose=verbose),
-												max_queue_size=12, workers=6, verbose=0)
+			ScoreGen(temp_features, batch_size=2048, verbose=verbose),
+			max_queue_size=12, workers=6, verbose=0)
 		temp_score = score_reshape(temp_score, temp_features)
 		all_score.append(temp_score)
 	score = np.zeros((features.shape[0], features.shape[0]), dtype=K.floatx())
@@ -683,9 +708,9 @@ def make_steps(step, ampl):
 	global w2ts, t2i, steps, features, score, histories
 
 	# shuffle the training pictures
-	random.shuffle(train)
+	random.shuffle(train)    # list, length is 13263
 
-	# Map whale id to the list of associated training picture hash value
+	# 将鲸鱼id映射到相关的训练图片的hash表上去
 	w2ts = {}
 	for w, hs in w2hs.items():
 		for h in hs:
@@ -699,7 +724,7 @@ def make_steps(step, ampl):
 	for i, t in enumerate(train): t2i[t] = i
 
 	# Compute the match score for each picture pair
-	features, score = compute_score()
+	features, score = compute_score()    # features shape (13263, 512), score shape (13263, 13263)
 
 	# Train the model for 'step' epochs
 	history = model.fit_generator(
@@ -748,7 +773,6 @@ else:
 	log = open('model_log.txt', "a")
 	start_str = '\n[Siamese========lapjv========Size512*3========Epoch450========MultiThreads]\n'
 	log.write(start_str)
-	log.write('\nEpoch===================================================================>10\n')
 	print('Start information write success!')
 
 	# epoch -> 10
@@ -761,29 +785,21 @@ else:
 		ampl = max(1.0, 100 ** -0.1 * ampl)
 
 	# epoch -> 110
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>110')
 	for _ in range(18): make_steps(5, 1.0)
 	model.save('./models/standard_epoch110.model', overwrite=True)
 
 	# epoch -> 160
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>160')
 	set_lr(model, 16e-5)
 	for _ in range(10): make_steps(5, 0.5)
 	model.save('./models/standard_epoch160.model', overwrite=True)
 
 	# epoch -> 200
 	set_lr(model, 4e-5)
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>200')
 	for _ in range(8): make_steps(5, 0.25)
 	model.save('./models/standard_epoch200.model', overwrite=True)
 
 	# epoch -> 210
 	set_lr(model, 1e-5)
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>210')
 	for _ in range(2): make_steps(5, 0.25)
 	model.save('./models/standard_epoch210.model', overwrite=True)
 
@@ -793,7 +809,7 @@ else:
 
 	# epoch -> 230
 	for _ in range(2): make_steps(5, 0.25)
-	model.save_weights('./models/standard_epoch230.model', overwrite=True)
+	model.save('./models/standard_epoch230.model', overwrite=True)
 
 	# epoch -> 240
 	for _ in range(2): make_steps(5, 0.25)
@@ -808,8 +824,7 @@ else:
 
 	model, branch_model, head_model = build_model(64e-5, 0.0002)
 	model.set_weights(weights)
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>300')
+
 	for _ in range(10): make_steps(5, 1.0)
 	model.save('./models/standard_epoch300.model', overwrite=True)
 
@@ -819,22 +834,16 @@ else:
 
 	# epoch -> 350
 	set_lr(model, 16e-5)
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>350')
 	for _ in range(10): make_steps(5, 0.5)
 	model.save('./models/standard_epoch350.model', overwrite=True)
 
 	# epoch -> 390
 	set_lr(model, 4e-5)
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>390')
 	for _ in range(8): make_steps(5, 0.25)
 	model.save('./models/standard_epoch390.model', overwrite=True)
 
 	# epoch -> 400
 	set_lr(model, 1e-5)
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>400')
 	for _ in range(2): make_steps(5, 0.25)
 	model.save('./models/standard_epoch400.model', overwrite=True)
 
@@ -856,10 +865,8 @@ else:
 	model.save('./models/standard_epoch440.model', overwrite=True)
 
 	# epoch -> 450
-	with open('model_log.txt', "a") as f:
-		f.write('\nEpoch===================================================================>450\n')
 	for _ in range(2): make_steps(5, 0.25)
-	model.save('./models/standard.model', overwrite=True)
+	model.save('./models/standard_epoch450.model', overwrite=True)
 
 model.summary()
 
@@ -959,8 +966,14 @@ fsubmit = branch_model.predict_generator(FeatureGen(submit), max_queue_size=20, 
 score = head_model.predict_generator(ScoreGen(fknown, fsubmit), max_queue_size=20, workers=10, verbose=0)
 score = score_reshape(score, fknown, fsubmit)
 
+# 判断submits目录是否存在
+if os.path.isdir('./submits'):
+	print('The directory of outputs has been created')
+else:
+	os.mkdir('./submits')
+
 # Generate the subsmission file.
-prepare_submission(0.99, './submission.csv')
+prepare_submission(0.99, './submits/submission.csv')
 prepare_sub_and_bootstrap_pickle(0.999999, './')
 toc = time.time()
 print("Submission time: ", (toc - tic) / 60.)
