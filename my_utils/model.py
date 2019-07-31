@@ -17,7 +17,7 @@ from keras import backend as K
 img_shape = (512, 512, 3)  # 模型使用的图像形状
 
 
-# shortcut connection structure
+# ResNet V2: shortcut connection structure
 def subblock(x, filter, **kwargs):
     x = BatchNormalization()(x)
     y = x
