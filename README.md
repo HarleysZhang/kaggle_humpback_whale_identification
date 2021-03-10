@@ -166,15 +166,20 @@ cp sample_submission.csv ./data/
 
 + 4.train your model
 without bootstrapping
-```
+
+```shell
 python3 main_all.py
 ```
+
 with bootstrapping
-```
+
+```shell
 python3 main_with_bootstrapping.py
 ```
+
 + 5.ensemble submission file
-```
+
+```shell
 python test.py
 # python test_tta.py    # with tta
 ```
@@ -270,4 +275,5 @@ def my_lapjv(score):
 ```
 
 ## Reference
+
 [Whale Recognition Model with score 0.78563](https://www.kaggle.com/martinpiotte/whale-recognition-model-with-score-0-78563)
