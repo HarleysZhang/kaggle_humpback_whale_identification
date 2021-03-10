@@ -190,50 +190,54 @@ Build a transformation matrix with the specified characteristics.
 
 ```python
 def build_transform(rotation, shear, height_zoom, width_zoom, height_shift, width_shift):
-	"""
-	Build a transformation matrix with the specified characteristics.
-	"""
-	rotation = np.deg2rad(rotation)
-	shear = np.deg2rad(shear)
-	rotation_matrix = np.array(
-		[[np.cos(rotation), np.sin(rotation), 0], [-np.sin(rotation), np.cos(rotation), 0], [0, 0, 1]])
-	shift_matrix = np.array(
-		[[1, 0, height_shift], [0, 1, width_shift], [0, 0, 1]])
-	shear_matrix = np.array(
-		[[1, np.sin(shear), 0], [0, np.cos(shear), 0], [0, 0, 1]])
-	zoom_matrix = np.array(
-		[[1.0 / height_zoom, 0, 0], [0, 1.0 / width_zoom, 0], [0, 0, 1]])
-	shift_matrix = np.array(
-		[[1, 0, -height_shift], [0, 1, -width_shift], [0, 0, 1]])
-	return np.dot(np.dot(rotation_matrix, shear_matrix), np.dot(zoom_matrix, shift_matrix))
+    """
+    Build a transformation matrix with the specified characteristics.
+    """
+    rotation = np.deg2rad(rotation)
+    shear = np.deg2rad(shear)
+    rotation_matrix = np.array(
+        [[np.cos(rotation), np.sin(rotation), 0], [-np.sin(rotation), np.cos(rotation), 0], [0, 0, 1]])
+    shift_matrix = np.array(
+        [[1, 0, height_shift], [0, 1, width_shift], [0, 0, 1]])
+    shear_matrix = np.array(
+        [[1, np.sin(shear), 0], [0, np.cos(shear), 0], [0, 0, 1]])
+    zoom_matrix = np.array(
+        [[1.0 / height_zoom, 0, 0], [0, 1.0 / width_zoom, 0], [0, 0, 1]])
+    shift_matrix = np.array(
+        [[1, 0, -height_shift], [0, 1, -width_shift], [0, 0, 1]])
+    return np.dot(np.dot(rotation_matrix, shear_matrix), np.dot(zoom_matrix, shift_matrix))
 ```
 
 Compute the score matrix by scoring every pictures from the training set against every other picture O(n^2) with multithreads.
 
 ```python
 def compute_score(verbose=1):
-	"""
-	Compute the score matrix by scoring every pictures from the training set against every other picture O(n^2).
-	"""
-	features = branch_model.predict_generator(FeatureGen(train, batch_size=64, verbose=verbose),max_queue_size=12, workers=6, verbose=0)
-	num_threads = 6
-	batch = features.shape[0] // (num_threads - 1)
-	if features.shape[0] % batch <= 3:
-	            num_threads = 5
-		if features.shape[0] % batch is not 0:
-			batch += 1
-	all_score = []
-	for start in range(0, features.shape[0], batch):
-		end = min(features.shape[0], start + batch)
-		temp_features = features[start:end, :]
-		temp_score = head_model.predict_generator(ScoreGen(temp_features, batch_size=4096, verbose=verbose)，max_queue_size=12, workers=6, verbose=0)
-		temp_score = score_reshape(temp_score, temp_features)
-		all_score.append(temp_score)
-	score = np.zeros((features.shape[0], features.shape[0]), dtype=K.floatx())
-	for i, start in enumerate(range(0, features.shape[0], batch)):
-		end = min(features.shape[0], start + batch)
-		score[start:end, start:end] = all_score[i]
-	return features, score
+    """
+    Compute the score matrix by scoring every pictures from the training set against every other picture O(n^2).
+    """
+    features = branch_model.predict_generator(
+        FeatureGen(train, batch_size=64, verbose=verbose),
+        max_queue_size=12, workers=6, verbose=0)
+    num_threads = 6
+    batch = features.shape[0] // (num_threads - 1)
+    if features.shape[0] % batch <= 3:
+        num_threads = 5
+        if features.shape[0] % batch is not 0:
+            batch += 1
+    all_score = []
+    for start in range(0, features.shape[0], batch):
+        end = min(features.shape[0], start + batch)
+        temp_features = features[start:end, :]
+        temp_score = head_model.predict_generator(
+            ScoreGen(temp_features, batch_size=2048, verbose=verbose),
+            max_queue_size=12, workers=6, verbose=0)
+        temp_score = score_reshape(temp_score, temp_features)
+        all_score.append(temp_score)
+    score = np.zeros((features.shape[0], features.shape[0]), dtype=K.floatx())
+    for i, start in enumerate(range(0, features.shape[0], batch)):
+        end = min(features.shape[0], start + batch)
+        score[start:end, start:end] = all_score[i]
+    return features, score
 ```
 
 sompute Linear programming problem with multithreads
