@@ -10,9 +10,13 @@
 |25th|[25th Place Solution](https://www.kaggle.com/c/humpback-whale-identification/discussion/82409)|Github code|Bartek|CosFace+ProtoNets|
 |31st|[31st Place Solution](https://www.kaggle.com/c/humpback-whale-identification/discussion/82393)|[Github code](https://github.com/suicao/Siamese-Whale-Identification)|Khoi Nguyen|RGB|
 |57th|[57th Place Solution](https://www.kaggle.com/c/humpback-whale-identification/discussion/82364)|Github code|Miguel Pinto|SoftTripletLoss|
+
 ## My solution
+
 Heavily based on [Whale Recognition Model with score 0.78563](https://www.kaggle.com/martinpiotte/whale-recognition-model-with-score-0-78563)
+
 ### Training
+
 + Framework: `Keras(backend: tensorflow)`
 + Model: `Siamese(CNN+Metric Learning)`
 + Augmentation: `slight(otation, shear, height_zoom, width_zoom, height_shift, width_shift)`
@@ -22,19 +26,27 @@ Heavily based on [Whale Recognition Model with score 0.78563](https://www.kaggle
 + Image size: `512*512`
 + Epochs: `400 or more`
 + Batch size: `32`
+
 ### Prediction
+
 + Threshold: `0.99 and 0.94 with bootstrapping`
 + TTA number: `4`
 + TTA augmentaion: `random slight: (rotation, shear, height_zoom, width_zoom, height_shift, width_shift)`
+
 ### Result
+
 + Training takes about more than 80 hours on GTX 1080TI without pretrained state-of-art model
 + Public LB: `0.92248`
 + Private LB: `0.92761`
-### Mode result ensemble: 
+
+### Mode result ensemble:
+
 + Ensemble of ensemble is not feasible, but ensemble is very effective
 + If single model is selected as far as possible for fusion, the effect is better, but the model difference is large, so the fusion effect is better. The fusion effect of models with similar Epochs is not as good as that with large difference
 + The ensemble of tta*4 + original result is effective
+
 #### ensemble code
+
 ```python
 # coding:utf-8
 # filename:ensemble.py
@@ -87,51 +99,72 @@ for p, row in enumerate(sub[0]):
     writer.writerow([row1[Hlabel], " ".join(tops_trgt)])
 out.close()
 ```
+
 ## My conclusion
+
 ### Work
+
 + Large image size helps a lot
 + ensemble is useful, but correct ensemble strategy is more useful
 + TTA maybe help, but ensemble of tta must be help
 + Put all images into SSD faster than HDD in training
 + training more epochs helps a lot
 + bootstrapping helps, but it need more time to train
+
 ### Don't work
+
 + pure classition don't work, but if you do some extra works,classition maybe very useful, such as this [1thsolution](https://www.kaggle.com/c/humpback-whale-identification/discussion/82366)
 + n-fold CV: my parteners have tried 5-fold CV, but it dont't work, maybe our ways have some problem, but i dont see n-fold CV as solution in [Kaggle Dissussion](https://www.kaggle.com/c/humpback-whale-identification/discussion)
+
 ### Uncertain
+
 + Grayscale images are not necessarily more effective than RGB
+
 ## Usage
+
 ### Environments
+
 ##### Hardware requirements
+
 + GTX1060, GTX1080TI better
 + 32GB Memory
 + SSD 
+
 #### Software requirments
+
 + Ubuntu 18.04
 + Anaconda3/Python3
 + Keras(backend: tensorflow
+
 ### Steps for usage
+
 + 1.clone the repository
-```
+
+```shell
 git https://github.com/HarleysZhang/kaggle_humpback_whale_identification.git
 cd kaggle_humpback_whale_identification
 ```
+
 + 2.install requirements
 
-```
+```shell
 pip3 install -r requirements.txt
 ```
+
 + 3.download data  and copy it to data folder
-```
+
+```shell
 kaggle competitions download -c humpback-whale-identification
 ```
-```
+
+```shell
 cp train ./data/
 cp test ./data/
 cp train.csv ./data/
 cp sample_submission.csv ./data/
 ```
-+ 4.train your model 
+
++ 4.train your model
 without bootstrapping
 ```
 python3 main_all.py
@@ -145,8 +178,11 @@ python3 main_with_bootstrapping.py
 python test.py
 # python test_tta.py    # with tta
 ```
+
 ## Some Code Interpretation
+
 Build a transformation matrix with the specified characteristics.
+
 ```python
 def build_transform(rotation, shear, height_zoom, width_zoom, height_shift, width_shift):
 	"""
@@ -156,13 +192,19 @@ def build_transform(rotation, shear, height_zoom, width_zoom, height_shift, widt
 	shear = np.deg2rad(shear)
 	rotation_matrix = np.array(
 		[[np.cos(rotation), np.sin(rotation), 0], [-np.sin(rotation), np.cos(rotation), 0], [0, 0, 1]])
-	shift_matrix = np.array([[1, 0, height_shift], [0, 1, width_shift], [0, 0, 1]])
-	shear_matrix = np.array([[1, np.sin(shear), 0], [0, np.cos(shear), 0], [0, 0, 1]])
-	zoom_matrix = np.array([[1.0 / height_zoom, 0, 0], [0, 1.0 / width_zoom, 0], [0, 0, 1]])
-	shift_matrix = np.array([[1, 0, -height_shift], [0, 1, -width_shift], [0, 0, 1]])
+	shift_matrix = np.array(
+		[[1, 0, height_shift], [0, 1, width_shift], [0, 0, 1]])
+	shear_matrix = np.array(
+		[[1, np.sin(shear), 0], [0, np.cos(shear), 0], [0, 0, 1]])
+	zoom_matrix = np.array(
+		[[1.0 / height_zoom, 0, 0], [0, 1.0 / width_zoom, 0], [0, 0, 1]])
+	shift_matrix = np.array(
+		[[1, 0, -height_shift], [0, 1, -width_shift], [0, 0, 1]])
 	return np.dot(np.dot(rotation_matrix, shear_matrix), np.dot(zoom_matrix, shift_matrix))
 ```
+
 Compute the score matrix by scoring every pictures from the training set against every other picture O(n^2) with multithreads.
+
 ```python
 def compute_score(verbose=1):
 	"""
@@ -187,9 +229,10 @@ def compute_score(verbose=1):
 		end = min(features.shape[0], start + batch)
 		score[start:end, start:end] = all_score[i]
 	return features, score
-
 ```
+
 sompute Linear programming problem with multithreads
+
 ```python
 def my_lapjv(score):
     num_threads = 6
@@ -225,5 +268,6 @@ def my_lapjv(score):
     # print("LAP completed")
     return x
 ```
+
 ## Reference
 [Whale Recognition Model with score 0.78563](https://www.kaggle.com/martinpiotte/whale-recognition-model-with-score-0-78563)
